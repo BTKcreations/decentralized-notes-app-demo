@@ -367,10 +367,19 @@ class Blockchain {
                     // In this demo, we only encrypt for Receiver. 
                 }
 
+                // Resolving Friend Name for FROM display?
+                let displayFrom = isFromMe ? "Me" : "Unknown";
+                if (!isFromMe) {
+                    // Try to find friend
+                    const friend = FriendManager.getFriendByPubKey(txn.from);
+                    if (friend) displayFrom = friend.nickname;
+                    else displayFrom = "Stranger (" + JSON.stringify(txn.from).substring(0, 10) + "...)";
+                }
+
                 notes.push({
                     id: txn.id,
                     timestamp: block.timestamp,
-                    from: isFromMe ? "Me" : "Someone",
+                    from: displayFrom,
                     content: content,
                     isFromMe: isFromMe
                 });
@@ -379,6 +388,31 @@ class Blockchain {
         return notes.reverse();
     }
 }
+
+// --- 3.5 FRIEND MANAGER ---
+const FriendManager = {
+    getFriends: () => {
+        const saved = localStorage.getItem('blocknotes_friends');
+        return saved ? JSON.parse(saved) : {};
+    },
+
+    saveFriend: (peerId, nickname, publicKey) => {
+        const friends = FriendManager.getFriends();
+        // Use PeerID as key for now, or PubKey hash. PeerID changes? 
+        // PeerID is transient in PeerJS usually, but we want to map PubKey to Name.
+        // Let's key by JSON string of PubKey for stability.
+        const key = JSON.stringify(publicKey);
+        friends[key] = { nickname, peerId, publicKey };
+        localStorage.setItem('blocknotes_friends', JSON.stringify(friends));
+        console.log("Friend Saved:", nickname);
+        window.dispatchEvent(new Event('friendsUpdated'));
+    },
+
+    getFriendByPubKey: (publicKey) => {
+        const friends = FriendManager.getFriends();
+        return friends[JSON.stringify(publicKey)];
+    }
+};
 
 // --- 4. NETWORK (PeerJS) ---
 class Network {
@@ -422,6 +456,19 @@ class Network {
             this.connections.push(conn);
             this.onPeerConnected(conn.peer);
 
+            // Handshake: Send my Identity
+            const wallet = Identity.getActiveWallet();
+            if (wallet) {
+                // Generate a random nickname if we don't have one user-set yet.
+                // For demo, we use PeerID or generic.
+                const myNickname = "User-" + conn.peer.substring(0, 4);
+                conn.send({
+                    type: 'HANDSHAKE',
+                    nickname: myNickname,
+                    publicKey: wallet.publicKey
+                });
+            }
+
             // Sync: Send my chain
             conn.send({
                 type: 'CHAIN_SYNC',
@@ -431,7 +478,13 @@ class Network {
 
         conn.on('data', (data) => {
             console.log("Received data", data);
-            if (data.type === 'CHAIN_SYNC') {
+
+            if (data.type === 'HANDSHAKE') {
+                // Save Friend!
+                FriendManager.saveFriend(conn.peer, data.nickname, data.publicKey);
+                alert(`Friend Found! Connected to ${data.nickname}`);
+
+            } else if (data.type === 'CHAIN_SYNC') {
                 const replaced = this.blockchain.replaceChain(data.chain);
                 if (replaced && this.onDataReceived) this.onDataReceived();
             } else if (data.type === 'NEW_BLOCK') {
@@ -474,12 +527,14 @@ const App = {
         network.init();
         App.checkSession();
         App.bindEvents();
+        window.addEventListener('friendsUpdated', App.updateFriendList);
     },
 
     checkSession: () => {
         const wallet = Identity.getActiveWallet();
         if (wallet) {
             App.showDashboard(wallet);
+            App.updateFriendList();
         } else {
             App.showLogin();
         }
@@ -693,6 +748,26 @@ const App = {
 
         // Also Add a "My Public Key" copy button somewhere?
         // Let's put it in the console for now or add a button later.
+    },
+
+    updateFriendList: () => {
+        const friends = FriendManager.getFriends();
+        const select = document.getElementById('friendSelector');
+        if (!select) return;
+
+        select.innerHTML = '<option value="">All Friends (Select One)</option>';
+        Object.values(friends).forEach(friend => {
+            const opt = document.createElement('option');
+            // Store stringified key as value
+            opt.value = JSON.stringify(friend.publicKey);
+            opt.innerText = friend.nickname + " (" + friend.peerId.substring(0, 4) + ")";
+            select.appendChild(opt);
+        });
+
+        // Auto-fill recipient input on change
+        select.onchange = () => {
+            document.getElementById('recipientInput').value = select.value;
+        };
     }
 };
 
