@@ -755,7 +755,13 @@ const App = {
         const select = document.getElementById('friendSelector');
         if (!select) return;
 
-        select.innerHTML = '<option value="">All Friends (Select One)</option>';
+        // If no friends, show hint
+        if (Object.keys(friends).length === 0) {
+            select.innerHTML = '<option value="">No Connected Friends (Sync & Handshake with Peer)</option>';
+            return;
+        }
+
+        select.innerHTML = '<option value="">Select a Friend...</option>';
         Object.values(friends).forEach(friend => {
             const opt = document.createElement('option');
             // Store stringified key as value
