@@ -433,8 +433,11 @@ class Network {
         this.peer.on('open', (id) => {
             console.log('My Peer ID is: ' + id);
             document.getElementById('myPeerId').value = id;
-            document.getElementById('networkStatus').innerHTML = `<i class="fas fa-wifi"></i> Online (${id.substring(0, 4)})`;
-            document.getElementById('networkStatus').classList.add('online');
+
+            // Fix: Don't overwrite connectionCount span!
+            const statusDiv = document.getElementById('networkStatus');
+            statusDiv.innerHTML = `<i class="fas fa-wifi"></i> Online (${id.substring(0, 4)}) <span id="connectionCount">0 Peers</span>`;
+            statusDiv.classList.add('online');
         });
 
         this.peer.on('connection', (conn) => {
