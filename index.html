@@ -43,6 +43,35 @@
             </div>
         </section>
 
+        <!-- P2P CONNECTION PANEL (GLOBAL) -->
+        <div id="p2p-panel" class="p2p-panel collapsed">
+            <div class="p2p-header" onclick="document.getElementById('p2p-panel').classList.toggle('collapsed');">
+                <span><i class="fas fa-network-wired"></i> P2P Connection Manager <small>(Sync before
+                        Login)</small></span>
+                <button id="toggleP2P" class="icon-btn"><i class="fas fa-chevron-down"></i></button>
+            </div>
+            <div class="p2p-content">
+                <div class="my-peer-id">
+                    <label>Your Peer ID (Share this):</label>
+                    <div class="copy-row">
+                        <input type="text" id="myPeerId" readonly>
+                        <button id="copyPeerBtn"><i class="fas fa-copy"></i></button>
+                    </div>
+                </div>
+                <div class="connect-peer">
+                    <label>Connect to Friend:</label>
+                    <div class="connect-row">
+                        <input type="text" id="peerIdInput" placeholder="Friend's Peer ID">
+                        <button id="connectPeerBtn" class="secondary-btn">Connect</button>
+                    </div>
+                </div>
+                <div class="peer-list">
+                    <h4>Connected Peers:</h4>
+                    <ul id="connectedPeersList"></ul>
+                </div>
+            </div>
+        </div>
+
         <!-- DASHBOARD VIEW -->
         <section id="dashboard-view" class="view-section" style="display: none;">
             <header class="dashboard-header">
@@ -62,33 +91,7 @@
                 </div>
             </header>
 
-            <!-- Network Helper Panel -->
-            <div id="p2p-panel" class="p2p-panel collapsed">
-                <div class="p2p-header" onclick="document.getElementById('p2p-panel').classList.toggle('collapsed');">
-                    <span><i class="fas fa-network-wired"></i> P2P Connection Manager</span>
-                    <button id="toggleP2P" class="icon-btn"><i class="fas fa-chevron-down"></i></button>
-                </div>
-                <div class="p2p-content">
-                    <div class="my-peer-id">
-                        <label>Your Peer ID (Share this):</label>
-                        <div class="copy-row">
-                            <input type="text" id="myPeerId" readonly>
-                            <button id="copyPeerBtn"><i class="fas fa-copy"></i></button>
-                        </div>
-                    </div>
-                    <div class="connect-peer">
-                        <label>Connect to Friend:</label>
-                        <div class="connect-row">
-                            <input type="text" id="peerIdInput" placeholder="Friend's Peer ID">
-                            <button id="connectPeerBtn" class="secondary-btn">Connect</button>
-                        </div>
-                    </div>
-                    <div class="peer-list">
-                        <h4>Connected Peers:</h4>
-                        <ul id="connectedPeersList"></ul>
-                    </div>
-                </div>
-            </div>
+            <!-- Network Helper Panel MOVED UP -->
 
             <main class="dashboard-grid">
                 <!-- Create Note Panel -->

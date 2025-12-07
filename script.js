@@ -132,6 +132,64 @@ const Identity = {
     // Mnemonic Word List (Tiny subset for demo)
     wordList: ["apple", "river", "sky", "mountain", "blue", "code", "crypto", "note", "safe", "music", "light", "star", "ocean", "forest", "fire", "wind"],
 
+    // 4 A. Derive Auth Key from Seed (Used to Encrypt/Decrypt the Wallet on Chain)
+    deriveAuthKey: async (mnemonic) => {
+        const enc = new TextEncoder();
+        const keyMaterial = await window.crypto.subtle.importKey(
+            "raw",
+            enc.encode(mnemonic),
+            { name: "PBKDF2" },
+            false,
+            ["deriveKey"]
+        );
+        return await window.crypto.subtle.deriveKey(
+            {
+                name: "PBKDF2",
+                salt: enc.encode("BLOCKNOTES_SALT"), // Constant salt for portability
+                iterations: 100000,
+                hash: "SHA-256"
+            },
+            keyMaterial,
+            { name: "AES-GCM", length: 256 },
+            true,
+            ["encrypt", "decrypt"]
+        );
+    },
+
+    encryptWalletForChain: async (walletData, mnemonic) => {
+        const authKey = await Identity.deriveAuthKey(mnemonic);
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        const encoded = new TextEncoder().encode(JSON.stringify(walletData));
+
+        const encrypted = await window.crypto.subtle.encrypt(
+            { name: "AES-GCM", iv: iv },
+            authKey,
+            encoded
+        );
+
+        return {
+            iv: Array.from(iv),
+            data: Array.from(new Uint8Array(encrypted))
+        };
+    },
+
+    decryptWalletFromChain: async (encryptedPackage, mnemonic) => {
+        try {
+            const authKey = await Identity.deriveAuthKey(mnemonic);
+            const iv = new Uint8Array(encryptedPackage.iv);
+            const data = new Uint8Array(encryptedPackage.data);
+
+            const decrypted = await window.crypto.subtle.decrypt(
+                { name: "AES-GCM", iv: iv },
+                authKey,
+                data
+            );
+            return JSON.parse(new TextDecoder().decode(decrypted));
+        } catch (e) {
+            return null; // Wrong key
+        }
+    },
+
     generateMnemonic: () => {
         const phrase = [];
         for (let i = 0; i < 12; i++) {
@@ -146,23 +204,45 @@ const Identity = {
         const privateKey = await CryptoUtils.exportKey(keyPair.privateKey);
 
         const mnemonic = Identity.generateMnemonic();
-
-        // In this demo, we mock the "restore" process by saving this map.
-        // In real world, the KeyPair comes FROM the Mnemonic.
         const walletData = { publicKey, privateKey, mnemonic };
+
+        // Save locally for immediate use
         localStorage.setItem('wallet_' + mnemonic, JSON.stringify(walletData));
 
-        return walletData;
+        // Return data AND encrypted package for chain
+        const encryptedIdentity = await Identity.encryptWalletForChain(walletData, mnemonic);
+
+        return { walletData, encryptedIdentity };
     },
 
-    login: (mnemonic) => {
-        const data = localStorage.getItem('wallet_' + mnemonic.trim());
-        if (!data) return null;
-        const wallet = JSON.parse(data);
+    login: async (mnemonic, chain) => {
+        // 1. Try Local Storage first (Fast path)
+        const localData = localStorage.getItem('wallet_' + mnemonic.trim());
+        if (localData) {
+            const wallet = JSON.parse(localData);
+            localStorage.setItem('activeWallet', JSON.stringify(wallet));
+            return wallet;
+        }
 
-        // Set active session
-        localStorage.setItem('activeWallet', JSON.stringify(wallet));
-        return wallet;
+        // 2. Try Recovery from Chain (Slow path)
+        if (!chain || chain.length === 0) return null;
+
+        console.log("Scanning chain for identity...");
+        for (let i = 1; i < chain.length; i++) {
+            const block = chain[i];
+            const txn = block.transactions; // Assuming 1 txn/block
+            if (txn.type === 'IDENTITY') {
+                const recovered = await Identity.decryptWalletFromChain(txn.payload, mnemonic);
+                if (recovered) {
+                    console.log("Identity Recovered from Chain!");
+                    localStorage.setItem('wallet_' + mnemonic, JSON.stringify(recovered));
+                    localStorage.setItem('activeWallet', JSON.stringify(recovered));
+                    return recovered;
+                }
+            }
+        }
+
+        return null;
     },
 
     getActiveWallet: () => {
@@ -412,23 +492,64 @@ const App = {
         // Create Wallet
         document.getElementById('createWalletBtn').addEventListener('click', () => {
             // User confirmed they saved the seed
-            // Switch to login tab and auto-fill
             const seed = document.getElementById('newSeedDisplay').innerText;
-            App.switchLoginTab('login');
-            document.getElementById('seedPhraseInput').value = seed;
+            // We need to trigger the Identity Mine here? No, we do it at creation?
+            // Actually, createWallet returned the data, we need to MINE it now if user confirms.
+            // Refactor: We mining immediately upon creation in switchLoginTab might be better?
+            // Simplification: We assume 'switchLoginTab' (create) generated it. 
+            // But we need to mine it. 
+
+            // Let's grab the pendingIdentity from a temp global or re-generate?
+            // Better: When "I Have Saved Them" is clicked, we mine the identity block.
+            if (window.pendingIdentityPayload) {
+                const idTxn = {
+                    id: crypto.randomUUID(),
+                    type: 'IDENTITY',
+                    payload: window.pendingIdentityPayload
+                };
+                blockchain.addTransaction(idTxn).then(block => {
+                    network.broadcastBlock(block);
+                    alert("Identity Mined to Chain! You can now recover this wallet on other devices (after sync).");
+
+                    App.switchLoginTab('login');
+                    document.getElementById('seedPhraseInput').value = seed;
+                });
+            }
         });
 
         // Login
-        document.getElementById('loginBtn').addEventListener('click', () => {
-            const seed = document.getElementById('seedPhraseInput').value;
-            if (!seed) return alert("Enter seed phrase");
+        document.getElementById('loginBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('loginBtn');
+            const originalText = btn.innerText;
+            btn.innerText = "Searching Chain...";
+            btn.disabled = true;
 
-            const wallet = Identity.login(seed);
+            const seed = document.getElementById('seedPhraseInput').value;
+            if (!seed) {
+                alert("Enter seed phrase");
+                btn.innerText = originalText;
+                btn.disabled = false;
+                return;
+            }
+
+            // Sync Warning
+            if (blockchain.chain.length <= 1) {
+                if (!confirm("Your chain is empty (Genesis only). If this is a new device, you MUST Connect to a Peer first to sync the chain, otherwise recovery will fail. Continue anyway?")) {
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                    return;
+                }
+            }
+
+            const wallet = await Identity.login(seed, blockchain.chain);
+
             if (wallet) {
                 App.showDashboard(wallet);
             } else {
-                alert("Invalid Seed Phrase or Wallet not found on this device (Simulated). Generate a new one!");
+                alert("Wallet NOT found in Local Storage OR on the current Chain.\n\n1. Check your Seed Phrase.\n2. Ensure you are Connected to Peers and Synced (Check P2P Manager).\n3. Wait for chain sync if you just connected.");
             }
+            btn.innerText = originalText;
+            btn.disabled = false;
         });
 
         // Logout
@@ -517,9 +638,10 @@ const App = {
             document.getElementById('login-tab-content').style.display = 'block';
             document.getElementById('create-tab-content').style.display = 'none';
         } else {
-            // Generate new wallet data to show
-            Identity.createWallet().then(wallet => {
-                document.getElementById('newSeedDisplay').innerText = wallet.mnemonic;
+            // Generate new wallet data AND Prepare Identity TXN
+            Identity.createWallet().then(res => {
+                document.getElementById('newSeedDisplay').innerText = res.walletData.mnemonic;
+                window.pendingIdentityPayload = res.encryptedIdentity; // Store for "I Have Saved Them" click
             });
             document.getElementById('login-tab-content').style.display = 'none';
             document.getElementById('create-tab-content').style.display = 'block';
