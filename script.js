@@ -437,6 +437,17 @@ const App = {
             location.reload();
         });
 
+        // Copy Public Key
+        document.getElementById('copyPublicKeyBtn').addEventListener('click', () => {
+            const wallet = Identity.getActiveWallet();
+            if (wallet && wallet.publicKey) {
+                const keyStr = JSON.stringify(wallet.publicKey);
+                navigator.clipboard.writeText(keyStr).then(() => {
+                    alert("Public Key Copied to Clipboard! Send this to your friend.");
+                });
+            }
+        });
+
         // Send Note
         document.getElementById('sendNoteBtn').addEventListener('click', async () => {
             const content = document.getElementById('noteContent').value;
