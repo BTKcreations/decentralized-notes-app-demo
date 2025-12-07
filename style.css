@@ -1,0 +1,251 @@
+/* Basic reset and dark theme */
+:root {
+    --primary: #00ffd5;
+    --primary-dim: #00ffd544;
+    --secondary: #ff007b;
+    --bg: #0f111a;
+    --card-bg: #1e212d;
+    --input-bg: #2a2e3d;
+    --text: #ffffff;
+    --text-muted: #8b9bb4;
+}
+
+body {
+    margin: 0;
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+}
+
+.app-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1rem;
+}
+
+/* Utils */
+.view-section {
+    animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* LOGIN VIEW */
+#login-view {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 80vh;
+}
+
+#login-view header {
+    text-align: center;
+    margin-bottom: 3rem;
+}
+
+#login-view h1 {
+    font-size: 3rem;
+    color: var(--primary);
+    margin: 0;
+    text-shadow: 0 0 20px var(--primary-dim);
+}
+
+.login-card {
+    background: var(--card-bg);
+    padding: 2.5rem;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    border: 1px solid #333;
+}
+
+.input-group input {
+    width: 100%;
+    padding: 1rem;
+    margin: 1rem 0;
+    background: var(--input-bg);
+    border: 1px solid #444;
+    border-radius: 8px;
+    color: white;
+    box-sizing: border-box;
+    /* Important for padding */
+}
+
+.button-group {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+/* DASHBOARD VIEW */
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 0;
+    border-bottom: 1px solid #333;
+    margin-bottom: 2rem;
+}
+
+.dashboard-header .logo {
+    font-weight: bold;
+    font-size: 1.5rem;
+    color: var(--primary);
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: 0.9rem;
+    background: var(--card-bg);
+    padding: 0.5rem 1rem;
+    border-radius: 50px;
+}
+
+.user-info code {
+    color: var(--primary);
+}
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr;
+    gap: 2rem;
+}
+
+@media (max-width: 768px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* CREATE PANEL */
+.create-panel {
+    background: var(--card-bg);
+    padding: 1.5rem;
+    border-radius: 12px;
+    height: fit-content;
+}
+
+.create-panel input,
+.create-panel textarea {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid #444;
+    border-radius: 8px;
+    color: white;
+    padding: 0.8rem;
+    margin-bottom: 1rem;
+    box-sizing: border-box;
+}
+
+.create-panel textarea {
+    min-height: 150px;
+    resize: vertical;
+}
+
+/* BUTTONS */
+.primary-btn {
+    background: var(--primary);
+    color: #000;
+    border: none;
+    padding: 0.8rem 1.5rem;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+    width: 100%;
+    transition: 0.2s;
+}
+
+.primary-btn:hover {
+    background: #00dcb7;
+    box-shadow: 0 0 15px var(--primary-dim);
+}
+
+.secondary-btn {
+    background: transparent;
+    border: 1px solid var(--primary);
+    color: var(--primary);
+    padding: 0.8rem 1.5rem;
+    border-radius: 8px;
+    cursor: pointer;
+    width: 100%;
+}
+
+.text-btn {
+    background: none;
+    border: none;
+    color: #ff5555;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+/* NOTES LIST */
+.notes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.note-card {
+    background: var(--card-bg);
+    padding: 1rem;
+    border-radius: 8px;
+    border-left: 4px solid #555;
+}
+
+.note-card.sent {
+    border-left-color: var(--primary);
+    /* Green for Sent/Self */
+}
+
+.note-card.received {
+    border-left-color: var(--secondary);
+    /* Pink for Received */
+}
+
+.note-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+}
+
+.note-content {
+    font-size: 1rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    margin-bottom: 1rem;
+}
+
+.note-footer {
+    font-size: 0.75rem;
+    color: #555;
+    display: flex;
+    gap: 1rem;
+    border-top: 1px solid #333;
+    padding-top: 0.5rem;
+    font-family: monospace;
+}
+
+.empty-state {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 2rem;
+    border: 2px dashed #333;
+    border-radius: 12px;
+}
