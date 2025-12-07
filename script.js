@@ -474,12 +474,18 @@ class Network {
                 type: 'CHAIN_SYNC',
                 chain: this.blockchain.chain
             });
+
+            // Discovery: Send my peer list (Gossip)
+            this.broadcastPeerList(conn);
         });
 
         conn.on('data', (data) => {
             console.log("Received data", data);
 
-            if (data.type === 'HANDSHAKE') {
+            if (data.type === 'PEER_DISCOVERY') {
+                // Auto-connect to new peers
+                this.handlePeerDiscovery(data.peers);
+            } else if (data.type === 'HANDSHAKE') {
                 // Save Friend!
                 FriendManager.saveFriend(conn.peer, data.nickname, data.publicKey);
                 alert(`Friend Found! Connected to ${data.nickname}`);
@@ -517,6 +523,32 @@ class Network {
                 nickname: myNickname,
                 publicKey: wallet.publicKey
             });
+        });
+    }
+
+    // Gossip Protocol
+    broadcastPeerList(targetConn = null) {
+        const peers = this.connections.map(c => c.peer);
+        const msg = {
+            type: 'PEER_DISCOVERY',
+            peers: peers
+        };
+
+        if (targetConn) {
+            targetConn.send(msg);
+        } else {
+            this.connections.forEach(conn => conn.send(msg));
+        }
+    }
+
+    handlePeerDiscovery(peerList) {
+        peerList.forEach(peerId => {
+            // Don't connect to self or existing connections
+            if (peerId !== this.peer.id && !this.connections.find(c => c.peer === peerId)) {
+                console.log("Discovered new peer via Gossip:", peerId);
+                // Connect!
+                this.connect(peerId);
+            }
         });
     }
 }
