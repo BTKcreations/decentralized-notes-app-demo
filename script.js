@@ -1,28 +1,193 @@
-// --- 1. CORE BLOCKCHAIN LOGIC ---
+// --- 1. CRYPTO UTILS (Web Crypto API) ---
+const CryptoUtils = {
+    // Generate RSA Key Pair from a "seed" (Simulated by using seed as entropy for simplicity)
+    // NOTE: Real deterministic RSA from seed is hard in WebCrypto. 
+    // We will use a simplified approach: Save/Load JWK keys, and use the Seed Phrase to "Encrypt" the Private Key in LocalStorage (Simulation).
+    // FOR THIS DEMO: We will just generate a new pair and warn user "This is a demo wallet". 
+    // Implementing BIP39 + Deterministic RSA in vanilla JS without huge libraries is complex.
+    // OPTION 2: We use the Seed Phrase string to generate an AES Key, and encrypt the RSA Keys with it. 
 
-/**
- * Simulates a cryptographic hash function.
- * In a real app, uses SHA-256. Here we use a simple string hash for readability/speed in simulation,
- * OR we can use Web Crypto API for realism. Let's use a simple reliable hash for this demo's speed.
- */
-async function sha256(message) {
-    const msgBuffer = new TextEncoder().encode(message);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
+    generateKeyPair: async () => {
+        return await window.crypto.subtle.generateKey(
+            {
+                name: "RSA-OAEP",
+                modulusLength: 2048,
+                publicExponent: new Uint8Array([1, 0, 1]),
+                hash: "SHA-256"
+            },
+            true,
+            ["encrypt", "decrypt"]
+        );
+    },
 
+    exportKey: async (key) => {
+        const exported = await window.crypto.subtle.exportKey("jwk", key);
+        return exported;
+    },
+
+    importKey: async (jwk, type) => {
+        return await window.crypto.subtle.importKey(
+            "jwk",
+            jwk,
+            {
+                name: "RSA-OAEP",
+                hash: "SHA-256"
+            },
+            true,
+            type === "public" ? ["encrypt"] : ["decrypt"]
+        );
+    },
+
+    // Hybrid Encryption: Encrypt Data with AES, Encrypt AES Key with RSA
+    encryptForUser: async (dataString, recipientPublicKeyJWK) => {
+        // 1. Import Recipient Public Key
+        const pubKey = await CryptoUtils.importKey(recipientPublicKeyJWK, "public");
+
+        // 2. Generate random AES Key
+        const aesKey = await window.crypto.subtle.generateKey(
+            { name: "AES-GCM", length: 256 },
+            true,
+            ["encrypt"]
+        );
+
+        // 3. Encrypt Data with AES Key
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        const encodedData = new TextEncoder().encode(dataString);
+        const encryptedContent = await window.crypto.subtle.encrypt(
+            { name: "AES-GCM", iv: iv },
+            aesKey,
+            encodedData
+        );
+
+        // 4. Export AES Key (Raw)
+        const rawAesKey = await window.crypto.subtle.exportKey("raw", aesKey);
+
+        // 5. Encrypt AES Key with RSA Public Key
+        const encryptedKey = await window.crypto.subtle.encrypt(
+            { name: "RSA-OAEP" },
+            pubKey,
+            rawAesKey
+        );
+
+        // Return package
+        return {
+            iv: Array.from(iv),
+            content: Array.from(new Uint8Array(encryptedContent)),
+            key: Array.from(new Uint8Array(encryptedKey))
+        };
+    },
+
+    decryptData: async (encryptedPackage, privateKeyJWK) => {
+        try {
+            // 1. Import Private Key
+            const privKey = await CryptoUtils.importKey(privateKeyJWK, "private");
+
+            // 2. Decrypt AES Key using Private Key
+            const encryptedKeyBuffer = new Uint8Array(encryptedPackage.key);
+            const rawAesKey = await window.crypto.subtle.decrypt(
+                { name: "RSA-OAEP" },
+                privKey,
+                encryptedKeyBuffer
+            );
+
+            // 3. Import AES Key
+            const aesKey = await window.crypto.subtle.importKey(
+                "raw",
+                rawAesKey,
+                { name: "AES-GCM" },
+                false,
+                ["decrypt"]
+            );
+
+            // 4. Decrypt Content
+            const iv = new Uint8Array(encryptedPackage.iv);
+            const contentBuffer = new Uint8Array(encryptedPackage.content);
+            const decryptedBuffer = await window.crypto.subtle.decrypt(
+                { name: "AES-GCM", iv: iv },
+                aesKey,
+                contentBuffer
+            );
+
+            return new TextDecoder().decode(decryptedBuffer);
+        } catch (e) {
+            console.error("Decryption failed", e);
+            return null; // Likely not for us
+        }
+    },
+
+    // Simple Hash for Block
+    sha256: async (message) => {
+        const msgBuffer = new TextEncoder().encode(message);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+};
+
+// --- 2. IDENTITY SYSTEM (Mnemonic & Key Management) ---
+const Identity = {
+    // Simplified: We generate a keypair and store it associated with the mnemonic in LocalStorage for demo.
+    // In real app, we need BIP39 to derive keys deterministically.
+
+    // Mnemonic Word List (Tiny subset for demo)
+    wordList: ["apple", "river", "sky", "mountain", "blue", "code", "crypto", "note", "safe", "music", "light", "star", "ocean", "forest", "fire", "wind"],
+
+    generateMnemonic: () => {
+        const phrase = [];
+        for (let i = 0; i < 12; i++) {
+            phrase.push(Identity.wordList[Math.floor(Math.random() * Identity.wordList.length)]);
+        }
+        return phrase.join(" ");
+    },
+
+    createWallet: async () => {
+        const keyPair = await CryptoUtils.generateKeyPair();
+        const publicKey = await CryptoUtils.exportKey(keyPair.publicKey);
+        const privateKey = await CryptoUtils.exportKey(keyPair.privateKey);
+
+        const mnemonic = Identity.generateMnemonic();
+
+        // In this demo, we mock the "restore" process by saving this map.
+        // In real world, the KeyPair comes FROM the Mnemonic.
+        const walletData = { publicKey, privateKey, mnemonic };
+        localStorage.setItem('wallet_' + mnemonic, JSON.stringify(walletData));
+
+        return walletData;
+    },
+
+    login: (mnemonic) => {
+        const data = localStorage.getItem('wallet_' + mnemonic.trim());
+        if (!data) return null;
+        const wallet = JSON.parse(data);
+
+        // Set active session
+        localStorage.setItem('activeWallet', JSON.stringify(wallet));
+        return wallet;
+    },
+
+    getActiveWallet: () => {
+        const data = localStorage.getItem('activeWallet');
+        return data ? JSON.parse(data) : null;
+    },
+
+    logout: () => {
+        localStorage.removeItem('activeWallet');
+    }
+};
+
+// --- 3. BLOCKCHAIN CORE ---
 class Block {
     constructor(timestamp, transactions, previousHash = '') {
         this.timestamp = timestamp;
-        this.transactions = transactions; // { from, to, content, id }
+        this.transactions = transactions;
+        // transactions: { id, from: pubKeyJWK, to: pubKeyJWK, secureData: {iv, content, key} }
         this.previousHash = previousHash;
         this.nonce = 0;
-        this.hash = ''; // Calculated asynchronously
+        this.hash = '';
     }
 
     async calculateHash() {
-        return await sha256(
+        return await CryptoUtils.sha256(
             this.previousHash +
             this.timestamp +
             JSON.stringify(this.transactions) +
@@ -32,26 +197,26 @@ class Block {
 
     async mineBlock(difficulty) {
         this.hash = await this.calculateHash();
-        const target = Array(difficulty + 1).join("0"); // e.g., "00"
-
+        const target = Array(difficulty + 1).join("0");
         while (this.hash.substring(0, difficulty) !== target) {
             this.nonce++;
             this.hash = await this.calculateHash();
         }
-        console.log("Block Mined: " + this.hash);
     }
 }
 
 class Blockchain {
     constructor() {
         this.chain = [];
-        this.difficulty = 2; // Low difficulty for instant feel
-        this.pendingTransactions = [];
+        this.difficulty = 2;
+        this.loadChain();
+    }
 
-        // Load chain from local storage if exists
-        const savedChain = localStorage.getItem('localBlockchain');
-        if (savedChain) {
-            this.chain = JSON.parse(savedChain);
+    loadChain() {
+        const saved = localStorage.getItem('localBlockchain');
+        if (saved) {
+            this.chain = JSON.parse(saved);
+            // Re-assign prototype methods if needed (not strictly needed for data objects)
         } else {
             this.initGenesis();
         }
@@ -63,17 +228,13 @@ class Blockchain {
         this.chain = [genesisBlock];
         this.saveChain();
     }
-
     getLatestBlock() {
         return this.chain[this.chain.length - 1];
     }
 
     async addTransaction(transaction) {
-        // In this simple model, 1 Transaction = 1 Block for simplicity 
-        // (Real chains bundle many txns, but for a notes app, immediate save is better).
         const newBlock = new Block(Date.now(), transaction, this.getLatestBlock().hash);
-
-        console.log("Mining new block...");
+        console.log("Mining...");
         await newBlock.mineBlock(this.difficulty);
 
         this.chain.push(newBlock);
@@ -83,130 +244,275 @@ class Blockchain {
 
     saveChain() {
         localStorage.setItem('localBlockchain', JSON.stringify(this.chain));
-        // Dispath event for other tabs
-        window.dispatchEvent(new Event('storage'));
+        window.dispatchEvent(new Event('chainUpdated'));
     }
 
-    // Get notes relevant to a specific user (Public Key)
-    getNotesForUser(publicKey) {
+    // Sync Logic: Replace chain if incoming chain is valid and longer
+    replaceChain(newChain) {
+        if (newChain.length > this.chain.length) {
+            // Validate new chain (Simplified: just length for demo, real: check hashes)
+            console.log("Replacing chain with longer connection chain");
+            this.chain = newChain;
+            this.saveChain();
+            return true;
+        }
+        return false;
+    }
+
+    async getDecryptedNotes(wallet) {
         const notes = [];
-        // Skip Genesis block (index 0)
+        // Skip Genesis
         for (let i = 1; i < this.chain.length; i++) {
             const block = this.chain[i];
-            const txn = block.transactions; // Assuming 1 txn per block
+            const txn = block.transactions; // Assuming 1 txn/block
 
-            // If I am the sender OR the receiver, I can see this note
-            if (txn.to === publicKey || txn.from === publicKey) {
+            // Check if I am "to" or "from" (Match Public Key JWK parameters slightly tricky, we compare stringified JWK)
+            // Ideally we compare thumbprints, but string comparison of JWK works if sorted. 
+            // We'll trust the "to" field is the exact JWK object.
+
+            const myPub = wallet.publicKey;
+            // Check match (simple JSON stringify comparison)
+            const isToMe = JSON.stringify(txn.to) === JSON.stringify(myPub);
+            const isFromMe = JSON.stringify(txn.from) === JSON.stringify(myPub);
+
+            if (isToMe || isFromMe) {
+                let content = "[Encrypted]";
+                if (isToMe) {
+                    // Try decrypt
+                    const decrypted = await CryptoUtils.decryptData(txn.secureData, wallet.privateKey);
+                    if (decrypted) content = decrypted;
+                } else if (isFromMe) {
+                    content = "You sent an encrypted note.";
+                    // Technically sender can't decrypt unless they encrypted a copy for themselves too!
+                    // In this demo, we only encrypt for Receiver. 
+                }
+
                 notes.push({
-                    ...txn,
+                    id: txn.id,
                     timestamp: block.timestamp,
-                    blockHash: block.hash
+                    from: isFromMe ? "Me" : "Someone",
+                    content: content,
+                    isFromMe: isFromMe
                 });
             }
         }
-        return notes.reverse(); // Newest first
+        return notes.reverse();
     }
 }
 
-// --- 2. IDENTITY SYSTEM (Simple Simulation) ---
-
-const Identity = {
-    generateKeys: async () => {
-        // Generating a random "Public Key" (Address)
-        // In real web3, this comes from an Elliptic Curve
-        const randomBytes = new Uint8Array(16);
-        window.crypto.getRandomValues(randomBytes);
-        const publicKey = '0x' + Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-
-        // Private key is just stored locally for login concept (not used for real signing here yet)
-        return { publicKey };
-    },
-
-    login: (publicKey) => {
-        localStorage.setItem('currentUser', publicKey);
-        return publicKey;
-    },
-
-    getCurrentUser: () => {
-        return localStorage.getItem('currentUser');
-    },
-
-    logout: () => {
-        localStorage.removeItem('currentUser');
+// --- 4. NETWORK (PeerJS) ---
+class Network {
+    constructor(blockchain, onPeerConnected, onDataReceived) {
+        this.blockchain = blockchain;
+        this.peer = null;
+        this.connections = [];
+        this.onPeerConnected = onPeerConnected;
+        this.onDataReceived = onDataReceived; // Callback to refresh UI
     }
-};
 
-// --- 3. UI LOGIC ---
+    init() {
+        // Create random Peer ID
+        this.peer = new Peer(null, {
+            debug: 2
+        });
 
+        this.peer.on('open', (id) => {
+            console.log('My Peer ID is: ' + id);
+            document.getElementById('myPeerId').value = id;
+            document.getElementById('networkStatus').innerHTML = `<i class="fas fa-wifi"></i> Online (${id.substring(0, 4)})`;
+            document.getElementById('networkStatus').classList.add('online');
+        });
+
+        this.peer.on('connection', (conn) => {
+            this.setupConnection(conn);
+        });
+
+        this.peer.on('error', (err) => console.error(err));
+    }
+
+    connect(peerId) {
+        const conn = this.peer.connect(peerId);
+        this.setupConnection(conn);
+        return conn;
+    }
+
+    setupConnection(conn) {
+        conn.on('open', () => {
+            console.log("Connected to: " + conn.peer);
+            this.connections.push(conn);
+            this.onPeerConnected(conn.peer);
+
+            // Sync: Send my chain
+            conn.send({
+                type: 'CHAIN_SYNC',
+                chain: this.blockchain.chain
+            });
+        });
+
+        conn.on('data', (data) => {
+            console.log("Received data", data);
+            if (data.type === 'CHAIN_SYNC') {
+                const replaced = this.blockchain.replaceChain(data.chain);
+                if (replaced && this.onDataReceived) this.onDataReceived();
+            } else if (data.type === 'NEW_BLOCK') {
+                // Add block (Simplified: trust peer)
+                this.blockchain.chain.push(data.block);
+                this.blockchain.saveChain();
+                if (this.onDataReceived) this.onDataReceived();
+            }
+        });
+    }
+
+    broadcastBlock(block) {
+        this.connections.forEach(conn => {
+            conn.send({
+                type: 'NEW_BLOCK',
+                block: block
+            });
+        });
+    }
+}
+
+// --- 5. MAIN APP LOGIC ---
 const blockchain = new Blockchain();
+const network = new Network(
+    blockchain,
+    (peerId) => { // On Connect
+        const ul = document.getElementById('connectedPeersList');
+        const li = document.createElement('li');
+        li.innerText = peerId;
+        ul.appendChild(li);
+        document.getElementById('connectionCount').innerText = `${network.connections.length} Peers`;
+    },
+    () => { // On Data (Chain updated)
+        App.loadNotes();
+    }
+);
+
 const App = {
     init: () => {
-        App.checkLogin();
+        network.init();
+        App.checkSession();
         App.bindEvents();
-        // Listen for storage changes (multi-tab sync)
-        window.addEventListener('storage', () => App.loadNotes());
     },
 
-    checkLogin: () => {
-        const user = Identity.getCurrentUser();
-        if (user) {
-            App.showDashboard(user);
+    checkSession: () => {
+        const wallet = Identity.getActiveWallet();
+        if (wallet) {
+            App.showDashboard(wallet);
         } else {
             App.showLogin();
         }
     },
 
     bindEvents: () => {
-        // Login Page Events
-        document.getElementById('generateBtn')?.addEventListener('click', async () => {
-            const keys = await Identity.generateKeys();
-            document.getElementById('loginKeyInput').value = keys.publicKey;
+        // Tab Switcher
+        window.App = App; // Expose for HTML onclick
+
+        // Create Wallet
+        document.getElementById('createWalletBtn').addEventListener('click', () => {
+            // User confirmed they saved the seed
+            // Switch to login tab and auto-fill
+            const seed = document.getElementById('newSeedDisplay').innerText;
+            App.switchLoginTab('login');
+            document.getElementById('seedPhraseInput').value = seed;
         });
 
-        document.getElementById('loginBtn')?.addEventListener('click', () => {
-            const key = document.getElementById('loginKeyInput').value;
-            if (key) {
-                Identity.login(key);
-                App.showDashboard(key);
+        // Login
+        document.getElementById('loginBtn').addEventListener('click', () => {
+            const seed = document.getElementById('seedPhraseInput').value;
+            if (!seed) return alert("Enter seed phrase");
+
+            const wallet = Identity.login(seed);
+            if (wallet) {
+                App.showDashboard(wallet);
+            } else {
+                alert("Invalid Seed Phrase or Wallet not found on this device (Simulated). Generate a new one!");
             }
         });
 
-        // Dashboard Events
-        document.getElementById('logoutBtn')?.addEventListener('click', () => {
+        // Logout
+        document.getElementById('logoutBtn').addEventListener('click', () => {
             Identity.logout();
-            App.showLogin();
+            location.reload();
         });
 
-        document.getElementById('sendNoteBtn')?.addEventListener('click', async () => {
+        // Send Note
+        document.getElementById('sendNoteBtn').addEventListener('click', async () => {
             const content = document.getElementById('noteContent').value;
-            const recipient = document.getElementById('recipientInput').value;
-            const sender = Identity.getCurrentUser();
+            const recipientStr = document.getElementById('recipientInput').value; // Expecting JWK JSON string?
+            // For UX: Recipient Input should be the Peer ID or a Public Key?
+            // In typical crypto, it's an address (Hash of PubKey). 
+            // For THIS DEMO: We will assume Recipient is "Self" if empty, or try to parse JSON JWK if provided.
+            // Simplified: We only support "Note to Self" fully, or we need a way to exchange PubKeys via PeerJS.
+            // Let's implement "Exchange Keys" later. For now, user copies their OWN PubKey JWK to send to themselves or others.
 
-            if (!content) return alert("Note content cannot be empty");
+            const wallet = Identity.getActiveWallet();
+            let recipientKey = wallet.publicKey; // Default to self
 
-            // If no recipient specified, send to SELF
-            const to = recipient ? recipient : sender;
-
-            const txn = {
-                id: crypto.randomUUID(),
-                from: sender,
-                to: to,
-                content: content // In a real app, this would be encrypted with Receiver's Public Key
-            };
+            if (recipientStr) {
+                try {
+                    recipientKey = JSON.parse(recipientStr);
+                } catch (e) {
+                    alert("Invalid Recipient Key Format (Must be JSON JWK)");
+                    return;
+                }
+            }
 
             const btn = document.getElementById('sendNoteBtn');
-            const originalText = btn.innerText;
-            btn.innerText = "Mining (Proof of Work)...";
+            btn.innerHTML = `<i class="fas fa-cog fa-spin"></i> Mining...`;
             btn.disabled = true;
 
-            await blockchain.addTransaction(txn);
+            // 1. Encrypt
+            const secureData = await CryptoUtils.encryptForUser(content, recipientKey);
 
-            btn.innerText = originalText;
+            // 2. Transact
+            const txn = {
+                id: crypto.randomUUID(),
+                from: wallet.publicKey,
+                to: recipientKey,
+                secureData: secureData
+            };
+
+            const newBlock = await blockchain.addTransaction(txn);
+            network.broadcastBlock(newBlock);
+
+            btn.innerHTML = `<i class="fas fa-cube"></i> Encrypt & Mine`;
             btn.disabled = false;
             document.getElementById('noteContent').value = '';
-
             App.loadNotes();
         });
+
+        // P2P UI
+        document.getElementById('toggleP2P').addEventListener('click', () => {
+            document.getElementById('p2p-panel').classList.toggle('collapsed');
+        });
+
+        document.getElementById('connectPeerBtn').addEventListener('click', () => {
+            const id = document.getElementById('peerIdInput').value;
+            if (id) network.connect(id);
+        });
+
+        document.getElementById('copyPeerBtn').addEventListener('click', () => {
+            const id = document.getElementById('myPeerId');
+            id.select();
+            document.execCommand('copy');
+            alert("Copied Peer ID!");
+        });
+    },
+
+    switchLoginTab: (tab) => {
+        if (tab === 'login') {
+            document.getElementById('login-tab-content').style.display = 'block';
+            document.getElementById('create-tab-content').style.display = 'none';
+        } else {
+            // Generate new wallet data to show
+            Identity.createWallet().then(wallet => {
+                document.getElementById('newSeedDisplay').innerText = wallet.mnemonic;
+            });
+            document.getElementById('login-tab-content').style.display = 'none';
+            document.getElementById('create-tab-content').style.display = 'block';
+        }
     },
 
     showLogin: () => {
@@ -214,46 +520,47 @@ const App = {
         document.getElementById('dashboard-view').style.display = 'none';
     },
 
-    showDashboard: (publicKey) => {
+    showDashboard: (wallet) => {
         document.getElementById('login-view').style.display = 'none';
         document.getElementById('dashboard-view').style.display = 'block';
-        document.getElementById('myAddressDisplay').innerText = publicKey;
+        // Show truncated key hash or something
+        document.getElementById('myAddressDisplay').innerText = "My Wallet Active";
         App.loadNotes();
     },
 
-    loadNotes: () => {
-        const currentUser = Identity.getCurrentUser();
-        if (!currentUser) return;
+    loadNotes: async () => {
+        const wallet = Identity.getActiveWallet();
+        if (!wallet) return;
 
-        const notes = blockchain.getNotesForUser(currentUser);
         const container = document.getElementById('notesContainer');
+        if (!container) return; // Might not exist if markup changed
+
+        container.innerHTML = '<div class="loading">Decrypting Chain...</div>';
+
+        const notes = await blockchain.getDecryptedNotes(wallet);
         container.innerHTML = '';
 
         if (notes.length === 0) {
-            container.innerHTML = '<p class="empty-state">No notes found on the chain for you.</p>';
+            container.innerHTML = '<p class="empty-state">No notes found (or you cannot decrypt them).</p>';
             return;
         }
 
         notes.forEach(note => {
-            const isFromMe = note.from === currentUser;
             const card = document.createElement('div');
-            card.className = `note-card ${isFromMe ? 'sent' : 'received'}`;
-
+            card.className = `note-card ${note.isFromMe ? 'sent' : 'received'}`;
             card.innerHTML = `
                 <div class="note-header">
-                    <span class="note-type">${isFromMe ? 'Sent by Me' : 'Received'}</span>
+                    <span class="note-type">${note.isFromMe ? 'My Note' : 'Received Note'}</span>
                     <span class="note-time">${new Date(note.timestamp).toLocaleString()}</span>
                 </div>
                 <div class="note-content">${note.content}</div>
-                <div class="note-footer">
-                    <span>From: ${note.from.substring(0, 8)}...</span>
-                    <span>To: ${note.to.substring(0, 8)}...</span>
-                </div>
             `;
             container.appendChild(card);
         });
+
+        // Also Add a "My Public Key" copy button somewhere?
+        // Let's put it in the console for now or add a button later.
     }
 };
 
-// Wait for DOM
 document.addEventListener('DOMContentLoaded', App.init);

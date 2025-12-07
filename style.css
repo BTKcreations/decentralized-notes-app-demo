@@ -1,13 +1,16 @@
 /* Basic reset and dark theme */
 :root {
     --primary: #00ffd5;
-    --primary-dim: #00ffd544;
+    --primary-dim: #00ffd522;
     --secondary: #ff007b;
-    --bg: #0f111a;
-    --card-bg: #1e212d;
-    --input-bg: #2a2e3d;
+    --bg: #0b0d12;
+    --card-bg: #161923;
+    --card-hover: #1c202d;
+    --input-bg: #222633;
     --text: #ffffff;
     --text-muted: #8b9bb4;
+    --success: #00ff88;
+    --danger: #ff4444;
 }
 
 body {
@@ -18,6 +21,121 @@ body {
     min-height: 100vh;
 }
 
+.badge {
+    background: var(--secondary);
+    font-size: 0.5em;
+    padding: 2px 6px;
+    border-radius: 4px;
+    vertical-align: super;
+}
+
+/* TABS */
+.tabs {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid #333;
+    padding-bottom: 0.5rem;
+}
+
+.tab-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 0.5rem;
+    transition: 0.3s;
+}
+
+.tab-btn.active {
+    color: var(--primary);
+    border-bottom: 2px solid var(--primary);
+}
+
+/* SEED BOX */
+.seed-box {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    background: var(--input-bg);
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    font-family: monospace;
+    font-size: 0.9rem;
+    color: var(--primary);
+}
+
+.seed-word {
+    background: #000;
+    padding: 4px;
+    text-align: center;
+    border-radius: 4px;
+}
+
+.hint {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+    font-style: italic;
+}
+
+/* P2P PANEL */
+.p2p-panel {
+    background: var(--card-bg);
+    border: 1px solid #333;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+    overflow: hidden;
+    transition: 0.3s;
+}
+
+.p2p-header {
+    background: #1a1e29;
+    padding: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+}
+
+.p2p-content {
+    padding: 1.5rem;
+    display: block;
+}
+
+.p2p-panel.collapsed .p2p-content {
+    display: none;
+}
+
+.network-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.network-status.online {
+    color: var(--success);
+}
+
+.copy-row,
+.connect-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.peer-list li {
+    color: var(--success);
+    font-size: 0.9rem;
+    font-family: monospace;
+}
+
+/* Existing Styles Override/Adjust */
 .app-container {
     max-width: 1200px;
     margin: 0 auto;

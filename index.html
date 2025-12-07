@@ -1,66 +1,10 @@
-<!DOCTYPE html>
-<html lang="en">
+<!-- Notes will appear here -->
+</div>
+</div>
+</main>
+</section>
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Blockchain Text Storage</title>
-    <script type="module" src="script.js"></script>
-    <link rel="stylesheet" href="style.css">
-</head>
-
-<body>
-    <div class="app-container">
-
-        <!-- LOGIN VIEW -->
-        <section id="login-view" class="view-section">
-            <header>
-                <h1>BlockNotes</h1>
-                <p>Decentralized Secure Note Sharing</p>
-            </header>
-            <div class="login-card">
-                <h2>Access Your Identity</h2>
-                <div class="input-group">
-                    <input type="text" id="loginKeyInput" placeholder="Enter your Public Key (Address)">
-                </div>
-                <div class="button-group">
-                    <button id="loginBtn" class="primary-btn">Access Notes</button>
-                    <button id="generateBtn" class="secondary-btn">Create New Identity</button>
-                </div>
-            </div>
-        </section>
-
-        <!-- DASHBOARD VIEW -->
-        <section id="dashboard-view" class="view-section" style="display: none;">
-            <header class="dashboard-header">
-                <div class="logo">BlockNotes</div>
-                <div class="user-info">
-                    <span>My Address:</span>
-                    <code id="myAddressDisplay">0x...</code>
-                    <button id="logoutBtn" class="text-btn">Logout</button>
-                </div>
-            </header>
-
-            <main class="dashboard-grid">
-                <!-- Create Note Panel -->
-                <div class="create-panel">
-                    <h2>New Note</h2>
-                    <input type="text" id="recipientInput" placeholder="Recipient Address (Leave empty for Self)">
-                    <textarea id="noteContent" placeholder="Write your secret note here..."></textarea>
-                    <button id="sendNoteBtn" class="primary-btn">Mint to Blockchain</button>
-                </div>
-
-                <!-- Notes Feed -->
-                <div class="feed-panel">
-                    <h2>My Chain Feed</h2>
-                    <div id="notesContainer" class="notes-list">
-                        <!-- Notes will appear here -->
-                    </div>
-                </div>
-            </main>
-        </section>
-
-    </div>
+</div>
 </body>
 
 </html>
