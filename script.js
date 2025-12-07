@@ -504,6 +504,21 @@ class Network {
             });
         });
     }
+
+    broadcastHandshake() {
+        const wallet = Identity.getActiveWallet();
+        if (!wallet) return;
+
+        console.log("Broadcasting Identity to all peers...");
+        this.connections.forEach(conn => {
+            const myNickname = "User-" + conn.peer.substring(0, 4); // Use peer ID part for nickname consistency or random
+            conn.send({
+                type: 'HANDSHAKE',
+                nickname: myNickname,
+                publicKey: wallet.publicKey
+            });
+        });
+    }
 }
 
 // --- 5. MAIN APP LOGIC ---
@@ -713,6 +728,10 @@ const App = {
         document.getElementById('dashboard-view').style.display = 'block';
         // Show truncated key hash or something
         document.getElementById('myAddressDisplay').innerText = "My Wallet Active";
+
+        // Trigger Handshake now that we are logged in
+        network.broadcastHandshake();
+
         App.loadNotes();
     },
 
