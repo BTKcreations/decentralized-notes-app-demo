@@ -441,12 +441,26 @@ class Network {
             this.setupConnection(conn);
         });
 
+        this.peer.on('disconnected', () => {
+            console.log("Connection lost. Reconnecting...");
+            document.getElementById('networkStatus').innerHTML = `<i class="fas fa-wifi"></i> Reconnecting...`;
+            document.getElementById('networkStatus').classList.remove('online');
+            this.peer.reconnect();
+        });
+
         this.peer.on('error', (err) => console.error(err));
     }
 
     connect(peerId) {
+        if (!this.peer || this.peer.disconnected) {
+            console.warn("Cannot connect: Peer disconnected. Trying to reconnect...");
+            this.peer.reconnect();
+            return;
+        }
         const conn = this.peer.connect(peerId);
-        this.setupConnection(conn);
+        if (conn) {
+            this.setupConnection(conn);
+        }
         return conn;
     }
 
